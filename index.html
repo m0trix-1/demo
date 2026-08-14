@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Chill Virtual Cat 3D — Bé Mèo Cưng</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sky:#7EC8E3;
+    --coral:#FF8C69;
+    --cream:#FFF8E7;
+    --plum:#3D2C4E;
+    --leaf:#6BBF59;
+    --gold:#FFC93C;
+    --glass: rgba(255,255,255,0.35);
+    --glass-strong: rgba(255,255,255,0.55);
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; user-select:none; -webkit-tap-highlight-color:transparent; font-family:'Quicksand', sans-serif; }
+  .display{ font-family:'Baloo 2', sans-serif; }
+  body,html{ width:100%; height:100%; overflow:hidden; background:#0b1026; }
+
+  #webgl-container{ width:100%; height:100%; position:absolute; inset:0; z-index:1; }
+
+  /* ---------- LOADING SCREEN ---------- */
+  #loading-screen{
+    position:absolute; inset:0; z-index:100;
+    background:linear-gradient(160deg,#3D2C4E 0%, #7EC8E3 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:#fff; transition:opacity .6s ease, visibility .6s ease;
+  }
+  #loading-screen .paw{ font-size:56px; animation:bounce 1s ease-in-out infinite; filter:drop-shadow(0 8px 15px rgba(0,0,0,.3)); }
+  #loading-screen h1{ font-family:'Baloo 2',sans-serif; font-size:26px; margin-top:14px; text-shadow:0 2px 8px rgba(0,0,0,.3); letter-spacing:.5px; }
+  #loading-bar-track{ width:220px; height:10px; background:rgba(255,255,255,.25); border-radius:10px; margin-top:22px; overflow:hidden; }
+  #loading-bar-fill{ width:0%; height:100%; background:linear-gradient(90deg,var(--gold),var(--coral)); border-radius:10px; transition:width .3s ease; }
+  #loading-screen.hidden{ opacity:0; visibility:hidden; pointer-events:none; }
+  @keyframes bounce{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-14px) } }
+
+  /* ---------- HUD TOP ---------- */
+  .hud-top{
+    position:absolute; top:0; left:0; width:100%; z-index:10;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:16px; gap:10px; pointer-events:none;
+  }
+  .hud-card{
+    pointer-events:auto;
+    background:var(--glass); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    border:1px solid rgba(255,255,255,.45);
+    border-radius:22px; box-shadow:0 10px 30px rgba(0,0,0,.15);
+  }
+  .profile-card{
+    display:flex; align-items:center; gap:12px; padding:8px 16px 8px 8px;
+  }
+  .level-ring{
+    position:relative; width:56px; height:56px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background: conic-gradient(var(--gold) calc(var(--pct,0)*1%), rgba(255,255,255,.35) 0);
+    transition: background 0.4s ease;
+  }
+  .level-ring::before{
+    content:''; position:absolute; inset:4px; border-radius:50%; background:#fff8e7;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,.15);
+  }
+  .level-ring span{ position:relative; z-index:2; font-family:'Baloo 2'; font-weight:800; font-size:18px; color:var(--plum); }
+  .profile-text{ display:flex; flex-direction:column; gap:4px; }
+  .cat-name{ font-family:'Baloo 2'; font-weight:700; color:#fff; text-shadow:0 2px 4px rgba(0,0,0,.25); font-size:15px; }
+  .coin-pill{
+    display:flex; align-items:center; gap:5px; background:rgba(255,255,255,.55);
+    border-radius:20px; padding:3px 10px; font-weight:700; font-size:13px; color:#8a5a00;
+    width:fit-content;
+  }
+  .coin-pill.pop{ animation:pop .35s ease; }
+  @keyframes pop{ 0%{transform:scale(1)} 40%{transform:scale(1.25)} 100%{transform:scale(1)} }
+
+  .stats-card{ padding:12px 16px; display:flex; flex-direction:column; gap:8px; min-width:170px; }
+  .stat-row{ display:flex; align-items:center; gap:8px; }
+  .stat-icon{ font-size:15px; width:18px; text-align:center; }
+  .stat-track{ flex:1; height:9px; border-radius:6px; background:rgba(255,255,255,.4); overflow:hidden; }
+  .stat-fill{ height:100%; border-radius:6px; transition:width .5s ease, background .5s ease; }
+
+  .icon-btn{
+    pointer-events:auto; width:46px; height:46px; border-radius:50%; border:1px solid rgba(255,255,255,.45);
+    background:var(--glass); backdrop-filter:blur(14px); color:#fff; font-size:19px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 8px 20px rgba(0,0,0,.15);
+    transition:transform .2s ease, background .2s ease;
+  }
+  .icon-btn:hover{ transform:translateY(-2px) scale(1.05); background:var(--glass-strong); }
+  .icon-btn:active{ transform:scale(.92); }
+
+  /* ---------- SETTINGS PANEL ---------- */
+  #settings-panel{
+    position:absolute; top:70px; right:16px; z-index:20; width:250px;
+    background:var(--glass-strong); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.5);
+    border-radius:20px; padding:16px; box-shadow:0 15px 40px rgba(0,0,0,.25);
+    transform:translateY(-14px) scale(.95); opacity:0; pointer-events:none; transition:all .25s ease;
+  }
+  #settings-panel.open{ transform:translateY(0) scale(1); opacity:1; pointer-events:auto; }
+  #settings-panel h3{ font-family:'Baloo 2'; font-size:15px; color:var(--plum); margin-bottom:10px; }
+  .settings-row{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:13px; font-weight:600; color:var(--plum); }
+  .settings-row button{
+    border:none; background:#fff; padding:6px 12px; border-radius:14px; font-weight:700; font-size:12px;
+    cursor:pointer; color:var(--plum); box-shadow:0 3px 8px rgba(0,0,0,.12);
+  }
+  .swatches{ display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .swatch{ width:26px; height:26px; border-radius:50%; cursor:pointer; border:2px solid #fff; box-shadow:0 3px 8px rgba(0,0,0,.2); transition:transform .15s; }
+  .swatch:hover{ transform:scale(1.15); }
+  .swatch.active{ outline:2px solid var(--plum); }
+  .reset-btn{ width:100%; padding:8px; border-radius:14px; border:none; background:var(--coral); color:#fff; font-weight:700; cursor:pointer; font-size:12px; margin-top:4px; }
+  .badges-row{ display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .badge{ font-size:18px; opacity:.25; filter:grayscale(1); transition:all .3s; }
+  .badge.unlocked{ opacity:1; filter:none; transform:scale(1.1); }
+
+  /* ---------- STATUS BUBBLE ---------- */
+  #status-bubble{
+    position:absolute; padding:8px 16px; background:#fff; border-radius:20px; font-weight:700; font-size:14px;
+    box-shadow:0 4px 15px rgba(0,0,0,.2); pointer-events:none; opacity:0; transition:opacity .3s;
+    transform:translate(-50%,-100%); z-index:5; color:var(--plum); white-space:nowrap; font-family:'Baloo 2';
+  }
+  #status-bubble::after{
+    content:''; position:absolute; bottom:-8px; left:50%; transform:translateX(-50%);
+    border-width:8px 8px 0; border-style:solid; border-color:#fff transparent; display:block; width:0;
+  }
+
+  /* ---------- BOTTOM DOCK ---------- */
+  .hud-bottom{ position:absolute; bottom:0; left:0; width:100%; z-index:10; display:flex; flex-direction:column; align-items:center; gap:12px; padding:18px; pointer-events:none; }
+
+  .tray{
+    pointer-events:auto; display:flex; gap:12px; padding:10px 14px; border-radius:30px;
+    background:var(--glass); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.4);
+    box-shadow:0 10px 30px rgba(0,0,0,.2);
+    max-width:94vw; overflow-x:auto;
+  }
+  .item-btn{
+    background:rgba(255,255,255,.9); border:none; outline:none; padding:9px 15px; border-radius:20px;
+    font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px; color:#333;
+    box-shadow:0 4px 10px rgba(0,0,0,.12); transition:all .18s ease; flex-shrink:0; font-family:'Baloo 2';
+  }
+  .item-btn:hover{ transform:translateY(-3px) scale(1.05); background:#fff; }
+  .item-btn:active{ transform:translateY(0) scale(.95); }
+  .item-btn .price{ font-size:10px; color:#b8860b; background:#fff3cd; padding:1px 6px; border-radius:10px; }
+
+  .tab-switch{ pointer-events:auto; display:flex; gap:6px; background:rgba(0,0,0,.25); backdrop-filter:blur(10px); padding:5px; border-radius:20px; }
+  .tab-btn{ border:none; background:transparent; color:#fff; font-weight:700; font-size:12px; padding:7px 14px; border-radius:16px; cursor:pointer; font-family:'Baloo 2'; transition:.2s; }
+  .tab-btn.active{ background:#fff; color:var(--plum); }
+
+  /* ---------- ACHIEVEMENT TOASTS ---------- */
+  #toast-area{ position:absolute; bottom:100px; left:16px; z-index:30; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+  .toast{
+    background:linear-gradient(120deg,#fff,#fff8e7); border-radius:16px; padding:10px 16px; box-shadow:0 10px 25px rgba(0,0,0,.25);
+    font-family:'Baloo 2'; font-weight:700; font-size:13px; color:var(--plum); display:flex; align-items:center; gap:8px;
+    animation: toastIn .4s ease, toastOut .4s ease 2.6s forwards; max-width:250px;
+  }
+  @keyframes toastIn{ from{ transform:translateX(-30px); opacity:0 } to{ transform:translateX(0); opacity:1 } }
+  @keyframes toastOut{ to{ transform:translateX(-30px); opacity:0 } }
+
+  #levelup-flash{ position:absolute; inset:0; background:radial-gradient(circle, rgba(255,201,60,.55), transparent 70%); opacity:0; pointer-events:none; z-index:40; transition:opacity .5s ease; }
+
+  @media (max-width:520px){
+    .stats-card{ min-width:130px; padding:8px 12px;}
+    .cat-name{ font-size:12px; }
+    .item-btn{ padding:8px 11px; font-size:12px; }
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+<body>
+
+<div id="webgl-container"></div>
+
+<div id="loading-screen">
+  <div class="paw">🐾</div>
+  <h1 class="display">Chill Virtual Cat 3D</h1>
+  <div id="loading-bar-track"><div id="loading-bar-fill"></div></div>
+</div>
+
+<div id="status-bubble">🐾 Meo meo...</div>
+<div id="levelup-flash"></div>
+<div id="toast-area"></div>
+
+<div class="hud-top">
+  <div class="hud-card profile-card">
+    <div class="level-ring" id="level-ring" style="--pct:0"><span id="level-num">1</span></div>
+    <div class="profile-text">
+      <div class="cat-name">🐱 Bé Cam</div>
+      <div class="coin-pill" id="coin-pill">🪙 <span id="coin-count">20</span></div>
+    </div>
+  </div>
+
+  <div class="hud-card stats-card">
+    <div class="stat-row"><span class="stat-icon">🍖</span><div class="stat-track"><div class="stat-fill" id="fill-hunger" style="width:80%;background:#ff8c69;"></div></div></div>
+    <div class="stat-row"><span class="stat-icon">😺</span><div class="stat-track"><div class="stat-fill" id="fill-happy" style="width:80%;background:#ff4d6d;"></div></div></div>
+    <div class="stat-row"><span class="stat-icon">⚡</span><div class="stat-track"><div class="stat-fill" id="fill-energy" style="width:100%;background:#48cae4;"></div></div></div>
+  </div>
+
+  <button class="icon-btn" id="btn-settings">⚙️</button>
+</div>
+
+<div id="settings-panel">
+  <h3>Bối cảnh &amp; Cài đặt</h3>
+  <div class="settings-row"><span id="env-label">🏠 Phòng khách</span><button id="btn-env">Đổi</button></div>
+  <div class="settings-row"><span>🔊 Âm thanh</span><button id="btn-audio">Bật</button></div>
+  <h3 style="margin-top:4px;">Màu lông bé mèo</h3>
+  <div class="swatches" id="swatches"></div>
+  <h3>Thành tích</h3>
+  <div class="badges-row" id="badges-row"></div>
+  <button class="reset-btn" id="btn-reset">🗑️ Xóa dữ liệu &amp; chơi lại</button>
+</div>
+
+<div class="hud-bottom">
+  <div class="tab-switch">
+    <button class="tab-btn active" data-tab="food">🍽️ Đồ ăn</button>
+    <button class="tab-btn" data-tab="toys">🧸 Đồ chơi</button>
+    <button class="tab-btn" data-tab="care">✋ Chăm sóc</button>
+  </div>
+
+  <div class="tray" id="tray-food">
+    <button class="item-btn" onclick="feedCat('fish')">🐟 Con Cá <span class="price">-5🪙</span></button>
+    <button class="item-btn" onclick="feedCat('pate')">🥫 Pate <span class="price">-8🪙</span></button>
+    <button class="item-btn" onclick="feedCat('sausage')">🌭 Xúc Xích <span class="price">-6🪙</span></button>
+    <button class="item-btn" onclick="feedCat('milk')">🥛 Sữa Ấm <span class="price">-4🪙</span></button>
+    <button class="item-btn" onclick="feedCat('durian')">🍈 Sầu Riêng <span class="price">Miễn phí</span></button>
+  </div>
+
+  <div class="tray" id="tray-toys" style="display:none;">
+    <button class="item-btn" onclick="playWithToy('yarn')">🧶 Cuộn Len</button>
+    <button class="item-btn" onclick="playWithToy('laser')">🔴 Đèn Laser</button>
+    <button class="item-btn" onclick="putCatToSleep()">🛏️ Cho Ngủ</button>
+  </div>
+
+  <div class="tray" id="tray-care" style="display:none;">
+    <button class="item-btn" onclick="petCat()">✋ Vuốt Ve</button>
+    <button class="item-btn" onclick="showStatus('👉 Chạm vào sàn để mèo đi tới nhé!')">🐾 Gọi Mèo Lại</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   1. THIẾT LẬP CẢNH 3D CƠ BẢN
+   ========================================================================= */
+const container = document.getElementById('webgl-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xdbe9f4);
+scene.fog = new THREE.FogExp2(0xdbe9f4, 0.02);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.set(0, 6, 13);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+container.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.maxPolarAngle = Math.PI/2 - 0.05;
+controls.minDistance = 4;
+controls.maxDistance = 28;
+controls.target.set(0, 1.2, 0);
+
+/* Ánh sáng */
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.2);
+dirLight.position.set(8, 12, 8);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 2048;
+dirLight.shadow.mapSize.height = 2048;
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 30;
+const D = 12;
+dirLight.shadow.camera.left = -D; dirLight.shadow.camera.right = D;
+dirLight.shadow.camera.top = D; dirLight.shadow.camera.bottom = -D;
+scene.add(dirLight);
+scene.add(dirLight.target);
+
+const hemiLight = new THREE.HemisphereLight(0xbde0fe, 0x8d6e63, 0.4);
+scene.add(hemiLight);
+
+/* Bầu trời sao ban đêm */
+const starGeo = new THREE.BufferGeometry();
+const starCount = 400;
+const starPos = new Float32Array(starCount*3);
+for(let i=0;i<starCount;i++){
+  const r = 60 + Math.random()*30;
+  const theta = Math.random()*Math.PI*2;
+  const phi = Math.random()*Math.PI*0.5;
+  starPos[i*3] = r*Math.sin(phi)*Math.cos(theta);
+  starPos[i*3+1] = 10 + r*Math.cos(phi)*0.6;
+  starPos[i*3+2] = r*Math.sin(phi)*Math.sin(theta);
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const starMat = new THREE.PointsMaterial({ color:0xffffff, size:0.6, transparent:true, opacity:0 });
+const starField = new THREE.Points(starGeo, starMat);
+scene.add(starField);
+
+/* Mặt trời / Mặt trăng */
+const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(2,16,16), new THREE.MeshBasicMaterial({ color:0xfff2c1 }));
+const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(1.5,16,16), new THREE.MeshBasicMaterial({ color:0xd9e6ff }));
+scene.add(sunMesh, moonMesh);
+
+/* Mặt đất */
+const floorGeo = new THREE.PlaneGeometry(70,70);
+const floorMat = new THREE.MeshStandardMaterial({ color:0xa8d5e2, roughness:0.85 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI/2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+/* =========================================================================
+   1b. TẢI MÔ HÌNH GLTF (models/*.gltf) — TẠM THỜI VÔ HIỆU HOÁ
+   Lưu ý: dữ liệu lưới trong các file .gltf hiện tại bị thiếu tam giác
+   (chỉ 4/12 tam giác của một khối hộp) nên khi render sẽ ra hình dẹt/méo
+   thay vì khối đặc. Hạ tầng tải model (loadAllModels/getModel) vẫn được
+   giữ nguyên bên dưới — chỉ cần thay file .gltf bằng model hợp lệ rồi gọi
+   getModel(key, fallback) thay cho fallback() là dùng được ngay, không
+   cần sửa code khác. Hiện tại toàn bộ đồ vật dùng hình dựng procedural
+   (đẹp, ổn định) để đảm bảo chất lượng hình ảnh.
+   ========================================================================= */
+const gltfLoader = new THREE.GLTFLoader();
+const MODEL_FILES = {
+  sofa:'models/sofa.gltf', bookshelf:'models/bookshelf.gltf', rug:'models/rug.gltf',
+  palm_tree:'models/palm_tree.gltf', beach_chair:'models/beach_chair.gltf', pool:'models/pool.gltf',
+  plant:'models/plant.gltf', scratching_post:'models/scratching_post.gltf',
+  cat_bowl:'models/cat_bowl.gltf', pate:'models/pate.gltf', durian:'models/durian.gltf', yarn:'models/yarn.gltf'
+};
+const modelCache = {};
+async function loadAllModels(onProgress){
+  const keys = Object.keys(MODEL_FILES);
+  let done = 0;
+  await Promise.all(keys.map(key => new Promise(resolve=>{
+    gltfLoader.load(MODEL_FILES[key], gltf=>{
+      modelCache[key] = gltf.scene;
+      done++; onProgress(done/keys.length); resolve();
+    }, undefined, ()=>{
+      modelCache[key] = null;
+      done++; onProgress(done/keys.length); resolve();
+    });
+  })));
+}
+const USE_GLTF_MODELS = false; // bật lại true khi có model .gltf hợp lệ
+function getModel(key, fallbackFn){
+  const src = USE_GLTF_MODELS ? modelCache[key] : null;
+  let obj;
+  if(src){ obj = src.clone(true); }
+  else { obj = fallbackFn ? fallbackFn() : new THREE.Group(); }
+  obj.traverse(o=>{ if(o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
+  return obj;
+}
+
+/* =========================================================================
+   2. MÔI TRƯỜNG (PHÒNG / CÔNG VIÊN / BÃI BIỂN)
+   ========================================================================= */
+const envGroup = new THREE.Group();
+scene.add(envGroup);
+
+const ENV_NAMES = ['🏠 Phòng khách', '🌳 Công viên', '🏖️ Bãi biển'];
+let envMode = 0;
+let currentBaseBg = new THREE.Color(0xdbe9f4);
+const oceanGroup = new THREE.Group();
+scene.add(oceanGroup);
+let ocean = null, oceanTime = 0;
+
+function clearGroup(g){ while(g.children.length>0){ g.remove(g.children[0]); } }
+
+function buildEnvironment(){
+  clearGroup(envGroup);
+  clearGroup(oceanGroup);
+  ocean = null;
+
+  if(envMode === 0){
+    // Phòng khách
+    currentBaseBg.set(0xebdccb);
+    floorMat.color.set(0x8d6e63);
+
+    // Tường sau lưng để phòng có chiều sâu, không bị trống/hòa vào nền
+    const wallMat = new THREE.MeshStandardMaterial({ color:0xf3e6d6, roughness:0.95 });
+    const backWall = new THREE.Mesh(new THREE.PlaneGeometry(30,9), wallMat);
+    backWall.position.set(0,4.5,-10); backWall.receiveShadow = true; envGroup.add(backWall);
+    const sideWall = new THREE.Mesh(new THREE.PlaneGeometry(30,9), wallMat.clone());
+    sideWall.rotation.y = Math.PI/2; sideWall.position.set(-10,4.5,0); sideWall.receiveShadow = true; envGroup.add(sideWall);
+    const trimMat = new THREE.MeshStandardMaterial({ color:0xcbb08a });
+    const backTrim = new THREE.Mesh(new THREE.BoxGeometry(30,0.3,0.1), trimMat);
+    backTrim.position.set(0,0.15,-9.94); envGroup.add(backTrim);
+    const sideTrim = new THREE.Mesh(new THREE.BoxGeometry(30,0.3,0.1), trimMat);
+    sideTrim.rotation.y = Math.PI/2; sideTrim.position.set(-9.94,0.15,0); envGroup.add(sideTrim);
+    // Cửa sổ trang trí
+    const winMat = new THREE.MeshStandardMaterial({ color:0xcfeaff, emissive:0xbfe3ff, emissiveIntensity:0.3 });
+    const window1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4,3), winMat);
+    window1.position.set(-6,4.5,-9.9); envGroup.add(window1);
+    const frameMat = new THREE.MeshStandardMaterial({ color:0xffffff });
+    const winFrame = new THREE.Mesh(new THREE.BoxGeometry(2.6,3.2,0.1), frameMat);
+    winFrame.position.set(-6,4.5,-9.95); envGroup.add(winFrame);
+
+    const rug = new THREE.Mesh(new THREE.CylinderGeometry(3.5,3.5,0.02,32), new THREE.MeshStandardMaterial({ color:0xf5f5f5, roughness:1 }));
+    rug.position.y = 0.01; rug.receiveShadow = true; envGroup.add(rug);
+
+    const sofa = new THREE.Mesh(new THREE.BoxGeometry(3,1,1.5), new THREE.MeshStandardMaterial({ color:0xe07a5f }));
+    sofa.position.set(-4.5,0.5,-4.5); sofa.castShadow = true; sofa.receiveShadow = true; envGroup.add(sofa);
+    const sofaBack = new THREE.Mesh(new THREE.BoxGeometry(3,0.8,0.4), new THREE.MeshStandardMaterial({ color:0xe07a5f }));
+    sofaBack.position.set(-4.5,1.3,-5.2); sofaBack.castShadow = true; envGroup.add(sofaBack);
+
+    const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.6,2,0.4), new THREE.MeshStandardMaterial({ color:0x6d4c41 }));
+    shelf.position.set(5,1,-5.5); shelf.castShadow = true; shelf.receiveShadow = true; envGroup.add(shelf);
+    for(let i=0;i<3;i++){
+      const book = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.5,0.3), new THREE.MeshStandardMaterial({ color:[0xd90429,0x48cae4,0x70e000][i] }));
+      book.position.set(4.5+i*0.2,1.6,-5.4); book.castShadow = true; envGroup.add(book);
+    }
+    // Cây cảnh trong nhà
+    const potMat = new THREE.MeshStandardMaterial({ color:0xa5673f });
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.28,0.5,10), potMat);
+    pot.position.set(-6,0.25,-1.5); pot.castShadow = true; envGroup.add(pot);
+    const leafMat = new THREE.MeshStandardMaterial({ color:0x2d6a4f });
+    for(let i=0;i<4;i++){
+      const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.35,1.1,6), leafMat);
+      leaf.position.set(-6+Math.cos(i)*0.15, 1.1, -1.5+Math.sin(i)*0.15);
+      leaf.rotation.z = (Math.random()-0.5)*0.3;
+      leaf.castShadow = true; envGroup.add(leaf);
+    }
+    // Cột cào móng
+    const postMat = new THREE.MeshStandardMaterial({ color:0xcbb994 });
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.4,1.2,10), postMat);
+    post.position.set(2.5,0.6,3.5); post.castShadow = true; envGroup.add(post);
+    const postBase = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,0.15,16), postMat);
+    postBase.position.set(2.5,0.075,3.5); postBase.castShadow = true; envGroup.add(postBase);
+    // Bát ăn cạnh mèo
+    const roomBowl = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.3,0.15,16), new THREE.MeshStandardMaterial({ color:0xf28fb0 }));
+    roomBowl.position.set(-1.5,0.075,2.8); roomBowl.castShadow = true; envGroup.add(roomBowl);
+
+    // Đèn sàn
+    const lampPole = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,2,8), new THREE.MeshStandardMaterial({ color:0x333333 }));
+    lampPole.position.set(4,1,-2); envGroup.add(lampPole);
+    const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.4,0.5,16,1,true), new THREE.MeshStandardMaterial({ color:0xfff3d6, emissive:0xffefb0, emissiveIntensity:0.4, side:THREE.DoubleSide }));
+    lampShade.position.set(4,2,-2); envGroup.add(lampShade);
+
+    dirLight.position.set(8,12,8);
+
+  } else if(envMode === 1){
+    // Công viên
+    currentBaseBg.set(0xa8dead);
+    floorMat.color.set(0x76c893);
+
+    for(let i=0;i<14;i++){
+      const tree = new THREE.Group();
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.3,1.5), new THREE.MeshStandardMaterial({ color:0x5c4033 }));
+      trunk.position.y = 0.75; trunk.castShadow = true;
+      const leaves = new THREE.Mesh(new THREE.ConeGeometry(1.2,2.5,8), new THREE.MeshStandardMaterial({ color:[0x2d6a4f,0x40916c,0x1b4332][i%3] }));
+      leaves.position.y = 2.2; leaves.castShadow = true;
+      tree.add(trunk, leaves);
+      const angle = (i/14)*Math.PI*2;
+      const rad = 9 + (i%3)*2.5;
+      tree.position.set(Math.cos(angle)*rad, 0, Math.sin(angle)*rad);
+      envGroup.add(tree);
+    }
+    // Ghế đá công viên
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(2,0.15,0.6), new THREE.MeshStandardMaterial({ color:0x8d6e63 }));
+    bench.position.set(-3,0.5,3); bench.castShadow = true; bench.receiveShadow = true; envGroup.add(bench);
+    // Hàng rào gỗ quanh khu vực chơi cho đỡ trống
+    const fenceMat = new THREE.MeshStandardMaterial({ color:0xa9744f });
+    for(let i=0;i<20;i++){
+      const angle = (i/20)*Math.PI*2;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.9,6), fenceMat);
+      post.position.set(Math.cos(angle)*13, 0.45, Math.sin(angle)*13);
+      envGroup.add(post);
+    }
+    // Hoa rải rác
+    for(let i=0;i<20;i++){
+      const flower = new THREE.Mesh(new THREE.SphereGeometry(0.08,6,6), new THREE.MeshStandardMaterial({ color:[0xffb703,0xff4d6d,0xffffff][i%3] }));
+      flower.position.set((Math.random()-0.5)*18, 0.08, (Math.random()-0.5)*18);
+      envGroup.add(flower);
+    }
+    dirLight.position.set(10,14,6);
+
+  } else {
+    // Bãi biển
+    currentBaseBg.set(0xcdeffd);
+    floorMat.color.set(0xf4e2c0);
+
+    ocean = new THREE.Mesh(
+      new THREE.PlaneGeometry(60,25,40,20),
+      new THREE.MeshStandardMaterial({ color:0x48cae4, transparent:true, opacity:0.85, roughness:0.15, metalness:0.1 })
+    );
+    ocean.rotation.x = -Math.PI/2;
+    ocean.position.set(0,0.02,-22);
+    ocean.receiveShadow = true;
+    oceanGroup.add(ocean);
+
+    for(let i=0;i<7;i++){
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.25,3,8), new THREE.MeshStandardMaterial({ color:0x8d6e63 }));
+      trunk.rotation.z = 0.15;
+      trunk.position.set(-12 + i*4, 1.5, -3 + (i%2)*1.5);
+      trunk.castShadow = true;
+      const crown = new THREE.Group();
+      for(let j=0;j<5;j++){
+        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.7,1.6,4), new THREE.MeshStandardMaterial({ color:0x40916c }));
+        leaf.rotation.z = Math.PI/2 + (j/5)*Math.PI*2*0.15;
+        leaf.rotation.y = (j/5)*Math.PI*2;
+        leaf.position.set(Math.cos(j)*0.3, 3.2, Math.sin(j)*0.3);
+        crown.add(leaf);
+      }
+      const tree = new THREE.Group(); tree.add(trunk, crown);
+      tree.position.copy(trunk.position); trunk.position.set(0,0,0);
+      envGroup.add(tree);
+    }
+    // Ô dù + ghế bãi biển
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,2,8), new THREE.MeshStandardMaterial({ color:0xffffff }));
+    pole.position.set(3,1,3); envGroup.add(pole);
+    const canopy = new THREE.Mesh(new THREE.ConeGeometry(1.3,0.7,12), new THREE.MeshStandardMaterial({ color:0xff8c69 }));
+    canopy.position.set(3,2.2,3); canopy.castShadow = true; envGroup.add(canopy);
+    const chair = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.4,1.4), new THREE.MeshStandardMaterial({ color:0xfff3e0 }));
+    chair.position.set(3,0.2,4.2); chair.castShadow = true; envGroup.add(chair);
+
+    // Hồ bơi mini trang trí
+    const poolMat = new THREE.MeshStandardMaterial({ color:0x48cae4, transparent:true, opacity:0.85 });
+    const miniPool = new THREE.Mesh(new THREE.CylinderGeometry(2,2,0.3,24), poolMat);
+    miniPool.position.set(-4,0.15,5); envGroup.add(miniPool);
+    const poolRim = new THREE.Mesh(new THREE.TorusGeometry(2,0.12,8,24), new THREE.MeshStandardMaterial({ color:0xffffff }));
+    poolRim.rotation.x = Math.PI/2; poolRim.position.set(-4,0.3,5); poolRim.castShadow = true; envGroup.add(poolRim);
+
+    dirLight.position.set(6,10,10);
+  }
+
+  document.getElementById('env-label').innerText = ENV_NAMES[envMode];
+}
+buildEnvironment();
+
+/* =========================================================================
+   3. TẠO MÈO 3D
+   ========================================================================= */
+function createCat(color){
+  const cat = new THREE.Group();
+  const catMat = new THREE.MeshStandardMaterial({ color: color || 0xffb703, roughness:0.5 });
+  const whiteMat = new THREE.MeshStandardMaterial({ color:0xffffff, roughness:0.5 });
+  const darkMat = new THREE.MeshStandardMaterial({ color:0x222222 });
+  const pinkMat = new THREE.MeshStandardMaterial({ color:0xffb3c6 });
+
+  const bodyGeo = new THREE.SphereGeometry(0.7,16,16); bodyGeo.scale(1,0.9,1.3);
+  const body = new THREE.Mesh(bodyGeo, catMat); body.position.y = 0.7; body.castShadow = true; cat.add(body);
+
+  const bellyGeo = new THREE.SphereGeometry(0.5,16,16); bellyGeo.scale(0.8,0.8,1);
+  const belly = new THREE.Mesh(bellyGeo, whiteMat); belly.position.set(0,0.65,0.25); cat.add(belly);
+
+  const headGroup = new THREE.Group(); headGroup.position.set(0,1.3,0.6); cat.add(headGroup);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.65,16,16), catMat); head.castShadow = true; headGroup.add(head);
+
+  const eyeGeo = new THREE.SphereGeometry(0.08,8,8);
+  const leftEye = new THREE.Mesh(eyeGeo, darkMat); leftEye.position.set(-0.22,0.08,0.58);
+  const rightEye = new THREE.Mesh(eyeGeo, darkMat); rightEye.position.set(0.22,0.08,0.58);
+  headGroup.add(leftEye, rightEye);
+
+  const noseMesh = new THREE.Mesh(new THREE.ConeGeometry(0.05,0.06,6), pinkMat);
+  noseMesh.position.set(0,-0.02,0.66); noseMesh.rotation.x = Math.PI/2; headGroup.add(noseMesh);
+
+  // Ria mép
+  const whiskerMat = new THREE.LineBasicMaterial({ color:0xffffff });
+  [-1,1].forEach(side=>{
+    for(let i=0;i<3;i++){
+      const pts = [new THREE.Vector3(side*0.15, -0.05+i*0.04, 0.55), new THREE.Vector3(side*0.55, -0.1+i*0.06, 0.45)];
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      headGroup.add(new THREE.Line(geo, whiskerMat));
+    }
+  });
+
+  const earGeo = new THREE.ConeGeometry(0.2,0.4,4);
+  const leftEar = new THREE.Mesh(earGeo, catMat); leftEar.position.set(-0.35,0.55,0); leftEar.rotation.z = 0.2;
+  const rightEar = new THREE.Mesh(earGeo, catMat); rightEar.position.set(0.35,0.55,0); rightEar.rotation.z = -0.2;
+  const earInL = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.2,4), pinkMat); earInL.position.set(-0.35,0.5,0.08); earInL.rotation.z = 0.2;
+  const earInR = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.2,4), pinkMat); earInR.position.set(0.35,0.5,0.08); earInR.rotation.z = -0.2;
+  headGroup.add(leftEar, rightEar, earInL, earInR);
+
+  const tailGeo = new THREE.CylinderGeometry(0.06,0.08,1,8);
+  const tail = new THREE.Mesh(tailGeo, catMat); tail.position.set(0,0.8,-1.1); tail.rotation.x = -Math.PI/4; cat.add(tail);
+
+  const legGeo = new THREE.CylinderGeometry(0.12,0.1,0.4,8);
+  const legs = [];
+  const positions = [[-0.3,0.2,0.4],[0.3,0.2,0.4],[-0.3,0.2,-0.4],[0.3,0.2,-0.4]];
+  positions.forEach(pos=>{
+    const leg = new THREE.Mesh(legGeo, whiteMat); leg.position.set(...pos); leg.castShadow = true; cat.add(leg);
+    const paw = new THREE.Mesh(new THREE.SphereGeometry(0.11,8,8), whiteMat); paw.position.set(pos[0],0.02,pos[2]); cat.add(paw);
+    legs.push(leg);
+  });
+
+  cat.userData = { body, headGroup, tail, legs, catMat, leftEye, rightEye, leftEar, rightEar, blinkTimer: 2+Math.random()*3 };
+  return cat;
+}
+
+let gameStateColor = 0xffb703;
+const cat = createCat(gameStateColor);
+scene.add(cat);
+
+/* Cuộn len (đồ chơi) - sẽ được thay bằng model thật sau khi tải xong */
+let yarnBall = new THREE.Mesh(new THREE.SphereGeometry(0.25,12,12), new THREE.MeshStandardMaterial({ color:0xff4d6d, roughness:0.9 }));
+yarnBall.castShadow = true; yarnBall.visible = false; scene.add(yarnBall);
+function upgradeYarnBall(){
+  const pos = yarnBall.position.clone(); const vis = yarnBall.visible;
+  scene.remove(yarnBall);
+  yarnBall = getModel('yarn', ()=> new THREE.Mesh(new THREE.SphereGeometry(0.25,12,12), new THREE.MeshStandardMaterial({ color:0xff4d6d, roughness:0.9 })));
+  yarnBall.position.copy(pos); yarnBall.visible = vis; scene.add(yarnBall);
+}
+
+/* Đèn laser */
+const laserDot = new THREE.Mesh(new THREE.SphereGeometry(0.07,8,8), new THREE.MeshBasicMaterial({ color:0xff0000 }));
+laserDot.visible = false; scene.add(laserDot);
+
+/* Giường ngủ */
+const bed = new THREE.Group();
+const bedBase = new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,0.25,20), new THREE.MeshStandardMaterial({ color:0xf6bd60 }));
+const bedInner = new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.7,0.15,20), new THREE.MeshStandardMaterial({ color:0xf7ede2 }));
+bedInner.position.y = 0.15;
+bed.add(bedBase, bedInner);
+bed.position.set(-3,0.02,2);
+bedBase.receiveShadow = true;
+bed.visible = false;
+scene.add(bed);
+
+/* =========================================================================
+   4. HỆ THỐNG HẠT (PARTICLES)
+   ========================================================================= */
+const particlesGroup = new THREE.Group();
+scene.add(particlesGroup);
+
+function spawnParticles(kind, count=8){
+  for(let i=0;i<count;i++){
+    let geo, mat;
+    if(kind==='heart'){ geo = new THREE.SphereGeometry(0.1,8,8); mat = new THREE.MeshBasicMaterial({ color:0xff4d6d }); }
+    else if(kind==='sparkle'){ geo = new THREE.OctahedronGeometry(0.12,0); mat = new THREE.MeshBasicMaterial({ color:0xffd166 }); }
+    else if(kind==='zzz'){ geo = new THREE.SphereGeometry(0.09,6,6); mat = new THREE.MeshBasicMaterial({ color:0xbde0fe }); }
+    else { geo = new THREE.SphereGeometry(0.1,8,8); mat = new THREE.MeshBasicMaterial({ color:0x999999 }); }
+    const p = new THREE.Mesh(geo, mat);
+    p.position.set(
+      cat.position.x + (Math.random()-0.5)*1.2,
+      cat.position.y + 1.5 + Math.random()*0.5,
+      cat.position.z + (Math.random()-0.5)*1.2
+    );
+    p.userData = { velY: 0.02+Math.random()*0.025, velX:(Math.random()-0.5)*0.01, life:1 };
+    particlesGroup.add(p);
+  }
+}
+function updateParticles(){
+  particlesGroup.children.slice().forEach(p=>{
+    p.position.y += p.userData.velY;
+    p.position.x += p.userData.velX;
+    p.rotation.y += 0.05;
+    p.userData.life -= 0.018;
+    p.scale.multiplyScalar(0.975);
+    if(p.userData.life <= 0) particlesGroup.remove(p);
+  });
+}
+
+/* =========================================================================
+   5. TRẠNG THÁI GAME (LEVEL, XU, CHỈ SỐ) + LƯU TRỮ
+   ========================================================================= */
+const STORAGE_KEY = 'chill-cat-save-v1';
+let state = {
+  level:1, xp:0, xpNext:100, coins:20,
+  hunger:80, happiness:80, energy:100,
+  envMode:0, catColor:0xffb703, soundOn:false,
+  achievements:[], durianCount:0
+};
+
+async function saveState(){
+  try{
+    if(window.storage){
+      await window.storage.set(STORAGE_KEY, JSON.stringify(state), false);
+    }
+  }catch(e){ /* lưu thất bại, bỏ qua để không làm gián đoạn game */ }
+}
+async function loadState(){
+  try{
+    if(window.storage){
+      const res = await window.storage.get(STORAGE_KEY, false);
+      if(res && res.value){
+        const loaded = JSON.parse(res.value);
+        state = Object.assign(state, loaded);
+      }
+    }
+  }catch(e){ /* chưa có dữ liệu lưu trước đó */ }
+}
+
+function clampStats(){
+  state.hunger = THREE.MathUtils.clamp(state.hunger,0,100);
+  state.happiness = THREE.MathUtils.clamp(state.happiness,0,100);
+  state.energy = THREE.MathUtils.clamp(state.energy,0,100);
+}
+
+/* ---------- CẬP NHẬT GIAO DIỆN ---------- */
+function refreshHUD(){
+  document.getElementById('level-num').innerText = state.level;
+  document.getElementById('level-ring').style.setProperty('--pct', Math.round((state.xp/state.xpNext)*100));
+  document.getElementById('coin-count').innerText = state.coins;
+  document.getElementById('fill-hunger').style.width = state.hunger + '%';
+  document.getElementById('fill-happy').style.width = state.happiness + '%';
+  document.getElementById('fill-energy').style.width = state.energy + '%';
+
+  const hFill = document.getElementById('fill-hunger');
+  hFill.style.background = state.hunger<25 ? '#d90429' : '#ff8c69';
+  const hpFill = document.getElementById('fill-happy');
+  hpFill.style.background = state.happiness<25 ? '#8d99ae' : '#ff4d6d';
+}
+function bumpCoinPill(){
+  const el = document.getElementById('coin-pill');
+  el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+}
+
+function showToast(text){
+  const area = document.getElementById('toast-area');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = text;
+  area.appendChild(t);
+  setTimeout(()=> t.remove(), 3200);
+}
+
+function addXP(amount){
+  state.xp += amount;
+  while(state.xp >= state.xpNext){
+    state.xp -= state.xpNext;
+    state.level += 1;
+    state.xpNext = Math.round(state.xpNext * 1.25);
+    state.coins += 20;
+    spawnParticles('sparkle', 14);
+    showToast(`🎉 Lên cấp <b>${state.level}</b>! +20🪙`);
+    const flash = document.getElementById('levelup-flash');
+    flash.style.opacity = '1';
+    setTimeout(()=> flash.style.opacity = '0', 600);
+  }
+  refreshHUD();
+  saveState();
+}
+
+/* ---------- THÀNH TÍCH ---------- */
+const ACHIEVEMENTS = [
+  { id:'first_feed', icon:'🍽️', name:'Bữa ăn đầu tiên', test: s=>s._fedOnce },
+  { id:'level5', icon:'⭐', name:'Đạt cấp 5', test: s=>s.level>=5 },
+  { id:'coins100', icon:'💰', name:'Triệu phú xu', test: s=>s.coins>=100 },
+  { id:'durian_survivor', icon:'🍈', name:'Dũng cảm với sầu riêng', test: s=>s.durianCount>=3 },
+  { id:'best_friend', icon:'💖', name:'Bạn thân của mèo', test: s=>s.happiness>=95 },
+];
+function checkAchievements(){
+  ACHIEVEMENTS.forEach(a=>{
+    if(!state.achievements.includes(a.id) && a.test(state)){
+      state.achievements.push(a.id);
+      showToast(`🏅 Mở khóa: <b>${a.name}</b>`);
+      renderBadges();
+      saveState();
+    }
+  });
+}
+function renderBadges(){
+  const row = document.getElementById('badges-row');
+  row.innerHTML = '';
+  ACHIEVEMENTS.forEach(a=>{
+    const span = document.createElement('span');
+    span.className = 'badge' + (state.achievements.includes(a.id) ? ' unlocked' : '');
+    span.title = a.name;
+    span.innerText = a.icon;
+    row.appendChild(span);
+  });
+}
+
+/* =========================================================================
+   6. LOGIC AI & HÀNH VI CỦA MÈO
+   ========================================================================= */
+let catState = 'IDLE'; // IDLE, WALKING, WALKING_TO_FOOD, EATING, ANGRY, WALKING_TO_TOY, PLAYING, SLEEPING
+let targetPosition = new THREE.Vector3();
+let actionTimer = 0;
+let activeFoodMesh = null;
+let sleepZzzTimer = 0;
+
+function setRandomTarget(){
+  targetPosition.set((Math.random()-0.5)*8, 0, (Math.random()-0.5)*8);
+  catState = 'WALKING';
+}
+
+function showStatus(text, duration=2500){
+  const bubble = document.getElementById('status-bubble');
+  bubble.innerText = text;
+  bubble.style.opacity = '1';
+  clearTimeout(bubble._t);
+  bubble._t = setTimeout(()=>{ bubble.style.opacity = '0'; }, duration);
+}
+
+const FOOD_INFO = {
+  fish:   { cost:5, hunger:25, happy:8,  emoji:'🐟', color:0x48cae4, geo:()=>new THREE.ConeGeometry(0.2,0.6,8) },
+  pate:   { cost:8, hunger:35, happy:12, emoji:'🥫', color:0xd90429, geo:()=>new THREE.CylinderGeometry(0.25,0.25,0.2,16) },
+  sausage:{ cost:6, hunger:20, happy:15, emoji:'🌭', color:0xff70a6, geo:()=>new THREE.CylinderGeometry(0.1,0.1,0.5,8) },
+  milk:   { cost:4, hunger:10, happy:10, emoji:'🥛', color:0xffffff, geo:()=>new THREE.CylinderGeometry(0.18,0.18,0.3,16) },
+  durian: { cost:0, hunger:0,  happy:-15,emoji:'🍈', color:0x70e000, geo:()=>new THREE.IcosahedronGeometry(0.3,0) },
+};
+
+function feedCat(type){
+  if(['EATING','ANGRY','PLAYING','SLEEPING'].includes(catState)){ showStatus('😽 Đợi mèo xong việc đã nha!'); return; }
+  const info = FOOD_INFO[type];
+  if(state.coins < info.cost){ showStatus('😿 Không đủ xu rồi!'); return; }
+  state.coins -= info.cost;
+  bumpCoinPill();
+
+  if(activeFoodMesh) scene.remove(activeFoodMesh);
+
+  const foodPos = new THREE.Vector3().copy(cat.position).add(new THREE.Vector3(0,0,2).applyQuaternion(cat.quaternion));
+  foodPos.y = 0.2;
+
+  // Pate & sầu riêng dùng model GLTF thật; các món khác dùng khối hình + bát ăn model
+  if(type === 'pate' || type === 'durian'){
+    activeFoodMesh = getModel(type, ()=> new THREE.Mesh(info.geo(), new THREE.MeshStandardMaterial({ color: info.color, roughness:0.35 })));
+    activeFoodMesh.scale.set(0.6,0.6,0.6);
+  } else {
+    activeFoodMesh = getModel('cat_bowl', ()=> new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.15,16), new THREE.MeshStandardMaterial({ color:0xf28fb0 })));
+    activeFoodMesh.scale.set(0.5,0.5,0.5);
+    const morsel = new THREE.Mesh(info.geo(), new THREE.MeshStandardMaterial({ color: info.color, roughness:0.35 }));
+    morsel.position.y = 0.35; morsel.castShadow = true;
+    activeFoodMesh.add(morsel);
+  }
+  activeFoodMesh.position.copy(foodPos);
+  scene.add(activeFoodMesh);
+
+  targetPosition.copy(foodPos);
+  catState = 'WALKING_TO_FOOD';
+  cat.userData.foodType = type;
+  refreshHUD(); saveState();
+}
+
+function handleArriveAtFood(){
+  const type = cat.userData.foodType;
+  const info = FOOD_INFO[type];
+
+  if(type === 'durian'){
+    catState = 'ANGRY';
+    showStatus('😾 Ứ hừ! Sầu riêng hôi quá! (Xù lông)');
+    playSynthSound('angry');
+    state.durianCount = (state.durianCount||0) + 1;
+    state.happiness += info.happy;
+    clampStats(); refreshHUD();
+
+    cat.userData.catMat.color.setHex(0xd90429);
+    cat.scale.set(1.3,1.3,1.3);
+    setTimeout(()=>{ cat.position.sub(new THREE.Vector3(0,0,1.5).applyQuaternion(cat.quaternion)); }, 400);
+    setTimeout(()=>{
+      cat.userData.catMat.color.setHex(state.catColor);
+      cat.scale.set(1,1,1);
+      if(activeFoodMesh) scene.remove(activeFoodMesh);
+      catState = 'IDLE';
+      checkAchievements();
+    }, 2500);
+
+  } else {
+    catState = 'EATING';
+    showStatus(`😸 Ôi ngon quá meow~ ${info.emoji}`);
+    playSynthSound('happy');
+    spawnParticles('heart', 8);
+
+    state.hunger += info.hunger;
+    state.happiness += info.happy;
+    state._fedOnce = true;
+    clampStats();
+    addXP(10);
+    checkAchievements();
+
+    setTimeout(()=>{
+      if(activeFoodMesh) scene.remove(activeFoodMesh);
+      catState = 'IDLE';
+    }, 2000);
+  }
+}
+
+function petCat(){
+  if(['EATING','ANGRY','SLEEPING'].includes(catState)){ showStatus('😽 Để mèo yên chút nha!'); return; }
+  showStatus('🥰 Mèo đang được vuốt ve~');
+  playSynthSound('happy');
+  spawnParticles('heart', 4);
+  state.happiness += 6;
+  clampStats();
+  addXP(2);
+  checkAchievements();
+}
+
+function playWithToy(kind){
+  if(['EATING','ANGRY','SLEEPING'].includes(catState)){ showStatus('😽 Mèo đang bận rồi!'); return; }
+  if(state.energy < 10){ showStatus('😴 Mèo quá mệt để chơi rồi...'); return; }
+
+  const pos = new THREE.Vector3((Math.random()-0.5)*7, 0, (Math.random()-0.5)*7);
+  if(kind === 'yarn'){
+    yarnBall.visible = true;
+    yarnBall.position.set(pos.x, 0.25, pos.z);
+    showStatus('🧶 Bắt lấy nè!');
+  } else {
+    laserDot.visible = true;
+    laserDot.position.set(pos.x, 0.02, pos.z);
+    showStatus('🔴 Đuổi theo đốm sáng nào!');
+  }
+  targetPosition.copy(pos);
+  catState = 'WALKING_TO_TOY';
+  cat.userData.toyKind = kind;
+}
+
+function handleArriveAtToy(){
+  catState = 'PLAYING';
+  showStatus('😻 Vui quá đi mất!');
+  playSynthSound('happy');
+  spawnParticles('heart', 6);
+  state.happiness += 12;
+  state.energy -= 15;
+  clampStats();
+  addXP(15);
+  checkAchievements();
+
+  setTimeout(()=>{
+    yarnBall.visible = false;
+    laserDot.visible = false;
+    catState = 'IDLE';
+  }, 1600);
+}
+
+function putCatToSleep(){
+  if(catState === 'SLEEPING'){ showStatus('💤 Mèo đang ngủ ngon rồi...'); return; }
+  if(['EATING','ANGRY'].includes(catState)) return;
+  bed.visible = true;
+  targetPosition.copy(bed.position);
+  catState = 'WALKING_TO_BED';
+  showStatus('🛏️ Đi ngủ thôi nào~');
+}
+
+function wakeCat(){
+  if(catState !== 'SLEEPING') return;
+  catState = 'IDLE';
+  bed.visible = false;
+  showStatus('🥱 Mèo dậy rồi, khỏe re!');
+}
+
+/* =========================================================================
+   7. ÂM THANH TỔNG HỢP (WEB AUDIO)
+   ========================================================================= */
+let audioCtx = null;
+function initAudio(){ if(!audioCtx){ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } }
+
+function playSynthSound(type){
+  if(!state.soundOn || !audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain); gain.connect(audioCtx.destination);
+
+  if(type === 'happy'){
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime+0.3);
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime+0.3);
+    osc.start(); osc.stop(audioCtx.currentTime+0.3);
+  } else if(type === 'angry'){
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+    osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime+0.5);
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime+0.5);
+    osc.start(); osc.stop(audioCtx.currentTime+0.5);
+  } else if(type === 'levelup'){
+    [523,659,784].forEach((f,i)=>{
+      const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.12, audioCtx.currentTime + i*0.1);
+      g.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + i*0.1 + 0.25);
+      o.start(audioCtx.currentTime + i*0.1); o.stop(audioCtx.currentTime + i*0.1 + 0.25);
+    });
+  }
+}
+
+setInterval(()=>{
+  if(catState === 'IDLE' && Math.random() > 0.3){
+    showStatus('🐾 Meo meo... (Thư giãn)');
+    playSynthSound('happy');
+  }
+}, 15000);
+
+/* Suy giảm chỉ số theo thời gian */
+setInterval(()=>{
+  const sleeping = catState === 'SLEEPING';
+  state.hunger -= sleeping ? 0.5 : 1.5;
+  state.happiness -= sleeping ? 0.3 : 1;
+  state.energy += sleeping ? 6 : -0.6;
+  clampStats();
+  refreshHUD();
+  saveState();
+}, 6000);
+
+/* =========================================================================
+   8. VÒNG LẶP GAME & HOẠT ẢNH
+   ========================================================================= */
+const clock = new THREE.Clock();
+const DAY_LENGTH = 140; // giây cho 1 chu kỳ ngày đêm đầy đủ
+let dayTime = 0.32; // bắt đầu vào ban ngày
+
+function updateDayNight(delta){
+  dayTime += delta / DAY_LENGTH;
+  dayTime %= 1;
+  const sunAngle = dayTime * Math.PI * 2;
+  const sunHeight = Math.sin(sunAngle - Math.PI/2);
+  const brightness = THREE.MathUtils.clamp((sunHeight+1)/2, 0.12, 1);
+  const nearHorizon = Math.max(0, 1 - Math.abs(sunHeight)/0.35);
+
+  dirLight.intensity = THREE.MathUtils.lerp(0.15, 1.25, brightness);
+  ambientLight.intensity = THREE.MathUtils.lerp(0.22, 0.7, brightness);
+  hemiLight.intensity = THREE.MathUtils.lerp(0.1, 0.45, brightness);
+
+  const warm = new THREE.Color(0xff9a56);
+  const cool = new THREE.Color(0xfff5e6);
+  dirLight.color.copy(cool).lerp(warm, nearHorizon);
+
+  const nightMix = THREE.MathUtils.clamp(1-brightness, 0, 1) * 0.85;
+  const bg = currentBaseBg.clone().lerp(new THREE.Color(0x0b1026), nightMix);
+  scene.background.copy(bg);
+  scene.fog.color.copy(bg);
+
+  starMat.opacity = nightMix;
+  starField.visible = nightMix > 0.04;
+
+  const orbitR = 40;
+  sunMesh.position.set(Math.cos(sunAngle)*orbitR, Math.sin(sunAngle)*orbitR + 6, -22);
+  moonMesh.position.set(-Math.cos(sunAngle)*orbitR, -Math.sin(sunAngle)*orbitR + 6, -22);
+  sunMesh.visible = sunHeight > -0.12;
+  moonMesh.visible = sunHeight <= -0.12;
+
+  dirLight.target.position.set(0,0,0);
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  const delta = Math.min(clock.getDelta(), 0.1);
+  const time = clock.getElapsedTime();
+
+  updateDayNight(delta);
+
+  if(ocean){
+    const posAttr = ocean.geometry.attributes.position;
+    oceanTime += delta;
+    for(let i=0;i<posAttr.count;i++){
+      const x = posAttr.getX(i), y = posAttr.getY(i);
+      posAttr.setZ(i, Math.sin(x*0.5+oceanTime)*0.15 + Math.cos(y*0.5+oceanTime*0.8)*0.1);
+    }
+    posAttr.needsUpdate = true;
+    ocean.geometry.computeVertexNormals();
+  }
+
+  if(cat){
+    const tempV = new THREE.Vector3().copy(cat.position).add(new THREE.Vector3(0,2,0));
+    tempV.project(camera);
+    const x = (tempV.x*.5+.5) * window.innerWidth;
+    const y = (tempV.y*-.5+.5) * window.innerHeight;
+    const bubble = document.getElementById('status-bubble');
+    bubble.style.left = `${x}px`;
+    bubble.style.top = `${y}px`;
+  }
+
+  if(cat.userData.tail){
+    const wagSpeed = 1.5 + (state.happiness/100)*3;
+    cat.userData.tail.rotation.z = Math.sin(time*wagSpeed) * 0.2;
+  }
+
+  // Chớp mắt
+  cat.userData.blinkTimer -= delta;
+  if(cat.userData.blinkTimer <= 0){
+    cat.userData.leftEye.scale.y = 0.1; cat.userData.rightEye.scale.y = 0.1;
+    setTimeout(()=>{ cat.userData.leftEye.scale.y = 1; cat.userData.rightEye.scale.y = 1; }, 120);
+    cat.userData.blinkTimer = 2.5 + Math.random()*3.5;
+  }
+  // Tai cụp khi buồn
+  const earDroop = state.happiness < 25 ? 0.55 : 0.2;
+  cat.userData.leftEar.rotation.z = earDroop;
+  cat.userData.rightEar.rotation.z = -earDroop;
+
+  if(catState === 'IDLE'){
+    actionTimer += delta;
+    cat.userData.body.position.y = 0.7 + Math.sin(time*2) * (0.03 + (state.energy<20?0.005:0));
+    if(actionTimer > 4){ setRandomTarget(); actionTimer = 0; }
+
+  } else if(catState === 'WALKING' || catState === 'WALKING_TO_FOOD' || catState === 'WALKING_TO_TOY' || catState === 'WALKING_TO_BED'){
+    const speed = state.energy < 15 ? 1.1 : 2.2;
+    const dir = new THREE.Vector3().subVectors(targetPosition, cat.position);
+    dir.y = 0;
+    const dist = dir.length();
+    if(dist > 0.2){
+      dir.normalize();
+      cat.position.addScaledVector(dir, speed*delta);
+      const targetAngle = Math.atan2(dir.x, dir.z);
+      cat.rotation.y = THREE.MathUtils.lerp(cat.rotation.y, targetAngle, 0.12);
+      cat.userData.legs.forEach((leg,i)=>{ leg.rotation.x = Math.sin(time*10 + (i%2)*Math.PI) * 0.4; });
+    } else {
+      cat.userData.legs.forEach(leg=> leg.rotation.x = 0);
+      if(catState === 'WALKING_TO_FOOD') handleArriveAtFood();
+      else if(catState === 'WALKING_TO_TOY') handleArriveAtToy();
+      else if(catState === 'WALKING_TO_BED'){ catState = 'SLEEPING'; showStatus('💤 Zzz...', 999999); }
+      else catState = 'IDLE';
+    }
+
+  } else if(catState === 'SLEEPING'){
+    cat.userData.body.position.y = 0.35 + Math.sin(time*1.2)*0.02;
+    cat.rotation.y = THREE.MathUtils.lerp(cat.rotation.y, cat.rotation.y + 0.2, 0.01);
+    sleepZzzTimer -= delta;
+    if(sleepZzzTimer <= 0){ spawnParticles('zzz', 2); sleepZzzTimer = 1.4; }
+    if(state.energy >= 100){ wakeCat(); }
+  }
+
+  updateParticles();
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+/* =========================================================================
+   9. GIAO DIỆN NGƯỜI DÙNG & SỰ KIỆN
+   ========================================================================= */
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+window.addEventListener('pointerdown', (e)=>{
+  if(e.target.closest('button') || e.target.closest('#settings-panel')) return;
+  initAudio();
+
+  mouse.x = (e.clientX/window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY/window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+
+  const catHit = raycaster.intersectObject(cat, true);
+  if(catHit.length > 0 && !['EATING','ANGRY','SLEEPING'].includes(catState)){
+    petCat();
+    return;
+  }
+
+  const intersects = raycaster.intersectObject(floor);
+  if(intersects.length > 0 && !['EATING','ANGRY','SLEEPING'].includes(catState)){
+    targetPosition.copy(intersects[0].point);
+    catState = 'WALKING';
+    showStatus('🐾 Mèo đang tiến lại nè!');
+  }
+});
+
+document.getElementById('btn-env').addEventListener('click', ()=>{
+  envMode = (envMode+1) % 3;
+  state.envMode = envMode;
+  buildEnvironment();
+  saveState();
+});
+
+document.getElementById('btn-audio').addEventListener('click', (e)=>{
+  initAudio();
+  state.soundOn = !state.soundOn;
+  e.target.innerText = state.soundOn ? 'Tắt' : 'Bật';
+  saveState();
+});
+
+document.getElementById('btn-settings').addEventListener('click', ()=>{
+  document.getElementById('settings-panel').classList.toggle('open');
+});
+
+document.getElementById('btn-reset').addEventListener('click', async ()=>{
+  if(!confirm('Xóa toàn bộ tiến trình và chơi lại từ đầu?')) return;
+  try{ if(window.storage) await window.storage.delete(STORAGE_KEY, false); }catch(e){}
+  location.reload();
+});
+
+const CAT_COLORS = [0xffb703, 0x8d99ae, 0x2b2d42, 0xe07a5f, 0xffffff, 0x606c38];
+function renderSwatches(){
+  const wrap = document.getElementById('swatches');
+  wrap.innerHTML = '';
+  CAT_COLORS.forEach(c=>{
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (state.catColor === c ? ' active' : '');
+    sw.style.background = '#' + c.toString(16).padStart(6,'0');
+    sw.addEventListener('click', ()=>{
+      state.catColor = c;
+      cat.userData.catMat.color.setHex(c);
+      renderSwatches();
+      saveState();
+    });
+    wrap.appendChild(sw);
+  });
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tray-food').style.display = btn.dataset.tab==='food' ? 'flex' : 'none';
+    document.getElementById('tray-toys').style.display = btn.dataset.tab==='toys' ? 'flex' : 'none';
+    document.getElementById('tray-care').style.display = btn.dataset.tab==='care' ? 'flex' : 'none';
+  });
+});
+
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* =========================================================================
+   10. KHỞI ĐỘNG GAME
+   ========================================================================= */
+async function bootGame(){
+  const fill = document.getElementById('loading-bar-fill');
+  fill.style.width = '0%';
+
+  if(USE_GLTF_MODELS){
+    await Promise.all([
+      loadAllModels(pct=>{ fill.style.width = (pct*80)+'%'; }),
+      loadState()
+    ]);
+  } else {
+    fill.style.width = '60%';
+    await loadState();
+  }
+  clampStats();
+  fill.style.width = '100%';
+
+  upgradeYarnBall();
+  envMode = state.envMode || 0;
+  buildEnvironment();
+  cat.userData.catMat.color.setHex(state.catColor);
+  document.getElementById('btn-audio').innerText = state.soundOn ? 'Tắt' : 'Bật';
+  renderSwatches();
+  renderBadges();
+  refreshHUD();
+
+  setTimeout(()=>{ document.getElementById('loading-screen').classList.add('hidden'); }, 350);
+
+  animate();
+}
+
+bootGame();
+</script>
+</body>
+</html>
